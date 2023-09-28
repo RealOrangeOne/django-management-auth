@@ -3,13 +3,17 @@ from django.utils.http import base36_to_int, int_to_base36
 
 
 class ManagementAuthTokenGenerator:
+    default_timeout = 60
     key_salt = __name__
     timeout_sep = "-"
 
     def __init__(self):
         self.signer = TimestampSigner(salt=self.key_salt)
 
-    def make_token(self, user_id, timeout=10):
+    def make_token(self, user_id, timeout=None):
+        if timeout is None:
+            timeout = self.default_timeout
+
         return (
             int_to_base36(timeout)
             + self.timeout_sep

@@ -1,8 +1,10 @@
 from datetime import datetime
+from io import StringIO
 
 import time_machine
 from django.contrib.auth import get_user
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils.http import int_to_base36
@@ -85,7 +87,7 @@ class TokenGeneratorTestCase(SimpleTestCase):
     def test_creates_token(self):
         self.assertEqual(
             self.generator.make_token(self.user.id),
-            "a-WzEsMTBd:1pBllg:Q4adGs7nG1YBw44IJYJyGUE01TeayUU2biOdfEDj0tc",
+            "1o-WzEsNjBd:1pBllg:6iGF6Rjv0I24e3Y0y-G_pXSaNg8UzExOHfeHglQ2UCo",
         )
 
     def test_validates_token(self):
@@ -139,3 +141,21 @@ class TokenGeneratorTestCase(SimpleTestCase):
             self.generator.make_token(self.user.id),
             self.generator.make_token(self.user.id, timeout=15),
         )
+
+
+class LoginAsManagementCommandTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create(username="user-1")
+
+    @time_machine.travel(datetime(2023, 1, 1))
+    def test_creates_token(self):
+        token = ManagementAuthTokenGenerator().make_token(self.user.id)
+
+        stdout = StringIO()
+        call_command("login_as", self.user.username, stdout=stdout)
+
+        self.assertIn(token, stdout.getvalue())
+
+        self.client.get(stdout.getvalue())
+        self.assertEqual(get_user(self.client), self.user)
