@@ -1,17 +1,77 @@
 from datetime import datetime
 
 import time_machine
+from django.contrib.auth import get_user
 from django.contrib.auth.models import User
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils.http import int_to_base36
 from management_auth.tokens import ManagementAuthTokenGenerator
 
 
-class LoginAsViewTestCase(SimpleTestCase):
-    def test_accessible(self):
-        response = self.client.get(reverse("management_auth_login_as", args=["foo"]))
+class LoginAsViewTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create(username="user-1")
+
+        cls.generator = ManagementAuthTokenGenerator()
+
+    def assertLoginSuccess(self, response):  # noqa:N802
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/accounts/profile/")
+        self.assertTrue(get_user(self.client).is_authenticated)
+
+    def assertLoginFail(self, response):  # noqa:N802
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/accounts/login/?next=")
+        self.assertFalse(get_user(self.client).is_authenticated)
+
+    def test_authenticates_user(self):
+        token = self.generator.make_token(self.user.id)
+
+        last_login = self.user.last_login
+
+        with self.assertNumQueries(10):
+            response = self.client.get(
+                reverse("management_auth_login_as", args=[token])
+            )
+
+        self.user.refresh_from_db()
+
+        self.assertLoginSuccess(response)
+        self.assertEqual(get_user(self.client), self.user)
+        self.assertEqual(self.user.last_login, last_login)
+
+    def test_disallow_head_request(self):
+        with self.assertNumQueries(0):
+            response = self.client.head(
+                reverse("management_auth_login_as", args=["not-a-token"])
+            )
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_invalid_token(self):
+        with self.assertNumQueries(0):
+            response = self.client.get(
+                reverse("management_auth_login_as", args=["not-a-token"])
+            )
+
+        self.assertLoginFail(response)
+
+    def test_authenticates_logged_in_user(self):
+        user_2 = User.objects.create(username="user-2")
+        self.client.force_login(user_2)
+        self.assertEqual(get_user(self.client), user_2)
+
+        token = self.generator.make_token(self.user.id)
+
+        with self.assertNumQueries(10):
+            response = self.client.get(
+                reverse("management_auth_login_as", args=[token])
+            )
+
+        self.assertLoginSuccess(response)
+        self.assertEqual(get_user(self.client), self.user)
 
 
 @time_machine.travel(datetime(2023, 1, 1))
