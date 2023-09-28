@@ -1,57 +1,42 @@
-from django.conf import settings
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.utils.crypto import constant_time_compare
-from django.utils.http import base36_to_int
+from django.core.signing import BadSignature, TimestampSigner
+from django.utils.http import base36_to_int, int_to_base36
 
 
-class ManagementAuthTokenGenerator(PasswordResetTokenGenerator):
+class ManagementAuthTokenGenerator:
     key_salt = __name__
+    timeout_sep = "-"
 
-    def __init__(self, timeout=10):
-        super().__init__()
-        self.timeout = timeout
+    def __init__(self):
+        self.signer = TimestampSigner(salt=self.key_salt)
 
-    def check_token(self, user, token):
-        """
-        Check that a password reset token is correct for a given user.
+    def make_token(self, user_id, timeout=10):
+        return (
+            int_to_base36(timeout)
+            + self.timeout_sep
+            + self.signer.sign_object([user_id, timeout], compress=True)
+        )
 
-        A modified version from `PasswordResetTokenGenerator` which reads the
-        timeout from the instance.
-        """
-        if not (user and token):
-            return False
+    def get_user_from_token(self, token):
+        if not token:
+            return None
+
         # Parse the token
         try:
-            ts_b36, _ = token.split("-")
+            ts_b36, token = token.split(self.timeout_sep, 1)
         except ValueError:
-            return False
+            return None
 
         try:
-            ts = base36_to_int(ts_b36)
+            max_age = base36_to_int(ts_b36)
         except ValueError:
-            return False
+            return None
 
-        # Check that the timestamp/uid has not been tampered with
-        for secret in [self.secret, *self.secret_fallbacks]:
-            if constant_time_compare(
-                self._make_token_with_timestamp(user, ts, secret),
-                token,
-            ):
-                break
-        else:
-            return False
+        try:
+            user_id, timeout = self.signer.unsign_object(token, max_age=max_age)
+        except BadSignature:
+            return None
 
-        # Check the timestamp is within limit.
-        if (self._num_seconds(self._now()) - ts) > settings.PASSWORD_RESET_TIMEOUT:
-            return False
+        if max_age != timeout:
+            return None
 
-        return True
-
-    def _make_hash_value(self, user, timestamp):
-        """
-        Hash the user's primary key(if available).
-
-        Running this data through salted_hmac() prevents password cracking
-        attempts using the reset token, provided the secret isn't compromised.
-        """
-        return f"{user.pk}{timestamp}"
+        return user_id
