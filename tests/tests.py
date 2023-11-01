@@ -75,6 +75,15 @@ class LoginAsViewTestCase(TestCase):
         self.assertLoginSuccess(response)
         self.assertEqual(get_user(self.client), self.user)
 
+    def test_no_cache(self):
+        token = self.generator.make_token(self.user.id)
+        response = self.client.get(reverse("management_auth_login_as", args=[token]))
+
+        self.assertEqual(
+            response["Cache-Control"],
+            "max-age=0, no-cache, no-store, must-revalidate, private",
+        )
+
 
 @time_machine.travel(datetime(2023, 1, 1))
 class TokenGeneratorTestCase(SimpleTestCase):

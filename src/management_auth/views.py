@@ -3,13 +3,16 @@ from django.contrib.auth import get_user_model, login
 from django.contrib.auth.views import redirect_to_login
 from django.http.response import HttpResponseRedirect
 from django.shortcuts import resolve_url
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.cache import never_cache
 
 from .tokens import ManagementAuthTokenGenerator
 
 User = get_user_model()
 
 
+@method_decorator(never_cache, name="dispatch")
 class LoginAsView(View):
     token_generator = ManagementAuthTokenGenerator()
 
