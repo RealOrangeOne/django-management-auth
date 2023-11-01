@@ -5,7 +5,7 @@ import time_machine
 from django.contrib.auth import get_user
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils.http import int_to_base36
 from management_auth.tokens import ManagementAuthTokenGenerator
@@ -168,3 +168,24 @@ class LoginAsManagementCommandTestCase(TestCase):
 
         self.client.get(stdout.getvalue())
         self.assertEqual(get_user(self.client), self.user)
+
+    @override_settings(MANAGEMENT_AUTH_BASE_URL="https://management-auth.com")
+    def test_get_absolute_url(self):
+        stdout = StringIO()
+        call_command("login_as", self.user.username, stdout=stdout)
+
+        self.assertIn("https://management-auth.com", stdout.getvalue())
+
+    @override_settings(WAGTAILADMIN_BASE_URL="https://wagtail.org")
+    def test_get_absolute_url_from_wagtail(self):
+        stdout = StringIO()
+        call_command("login_as", self.user.username, stdout=stdout)
+
+        self.assertIn("https://wagtail.org", stdout.getvalue())
+
+    @override_settings(SITE_ID=1)
+    def test_get_absolute_url_from_django_site(self):
+        stdout = StringIO()
+        call_command("login_as", self.user.username, stdout=stdout)
+
+        self.assertIn("https://example.com", stdout.getvalue())
