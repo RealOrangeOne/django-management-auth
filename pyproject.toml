@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "django-management-auth"
 description = "Login to a Django application from a management command"
-authors = [{name = "Torchbox", email = "tech@torchbox.com"}]
+authors = [{name = "Jake Howard"}]
 readme = "README.md"
 license = {file = "LICENSE"}
 classifiers = [
