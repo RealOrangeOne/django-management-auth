@@ -34,7 +34,8 @@ name = "management_auth"
 
 [project.optional-dependencies]
 test = [
-    "time_machine"
+    "time_machine",
+    "hypothesis[django]"
 ]
 lint = [
     "ruff==0.0.291",

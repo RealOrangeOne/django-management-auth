@@ -1,3 +1,4 @@
+import string
 from datetime import datetime
 from io import StringIO
 
@@ -6,12 +7,22 @@ from django.contrib.auth import get_user
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils.http import int_to_base36
+from hypothesis import given
+from hypothesis import strategies as st
+from hypothesis.extra.django import TestCase as HypothesisTestCase
 from management_auth.tokens import ManagementAuthTokenGenerator
 
+token_strategy = st.text(
+    alphabet=st.characters(
+        codec="ascii", exclude_characters={"?", "#", *string.whitespace}
+    ),
+    min_size=3,
+)
 
-class LoginAsViewTestCase(TestCase):
+
+class LoginAsViewTestCase(HypothesisTestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create(username="user-1")
@@ -52,13 +63,22 @@ class LoginAsViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 405)
 
-    def test_invalid_token(self):
-        with self.assertNumQueries(0):
-            response = self.client.get(
-                reverse("management_auth_login_as", args=["not-a-token"])
-            )
+    @given(token_strategy)
+    def test_invalid_token(self, token):
+        # Work around the reverse potentially failing
+        url = reverse("management_auth_login_as", args=["token-placeholder"]).replace(
+            "token-placeholder", token
+        )
 
-        self.assertLoginFail(response)
+        with self.assertNumQueries(0):
+            response = self.client.get(url)
+
+        if response.status_code == 404:
+            # If it was a 404, ensure it's because of URL resolving
+            with self.assertRaises(NoReverseMatch):
+                reverse("management_auth_login_as", args=[token])
+        else:
+            self.assertLoginFail(response)
 
     def test_authenticates_logged_in_user(self):
         user_2 = User.objects.create(username="user-2")
@@ -132,6 +152,10 @@ class TokenGeneratorTestCase(SimpleTestCase):
 
         with time_machine.travel(datetime(2023, 1, 2)):
             self.assertIsNone(self.generator.get_user_from_token(token))
+
+    @given(token_strategy)
+    def test_invalid_token(self, token):
+        self.assertIsNone(self.generator.get_user_from_token(token))
 
     def test_stable_tokens(self):
         self.assertEqual(
