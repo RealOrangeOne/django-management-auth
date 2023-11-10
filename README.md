@@ -15,6 +15,14 @@ pip install django-management-auth
 
 Then, add `management_auth` to `INSTALLED_APPS`.
 
+Finally, add the required URLs:
+
+```python
+# urls.py
+
+urlpatterns += [path(".login-as", include("management_auth.urls"))]
+```
+
 ## Usage
 
 Authentication happens using a short-lived signed URL, generated from a management command.
