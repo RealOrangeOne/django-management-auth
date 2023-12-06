@@ -26,7 +26,7 @@ classifiers = [
 dynamic = ["version"]
 requires-python = ">=3.8"
 dependencies = [
-    "Django>=3.0,<5.0",
+    "Django>=3.0,<5.1",
 ]
 
 [tool.flit.module]
